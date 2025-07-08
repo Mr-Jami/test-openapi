@@ -39,6 +39,22 @@ export interface SwaggerSpec {
     };
 }
 
+// Add to the SwaggerSpec interface
+export interface SwaggerSpec {
+    definitions?: Record<string, SwaggerDefinition>;
+    components?: {
+        schemas?: Record<string, SwaggerDefinition>;
+    };
+    paths?: Record<string, any>;
+    info?: {
+        title?: string;
+        version?: string;
+    };
+    basePath?: string;
+    host?: string;
+    schemes?: string[];
+}
+
 export class SwaggerParser {
     private spec: SwaggerSpec;
 

@@ -3,12 +3,15 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "generate-types": "npx ts-node packages/ng-client/src/lib/generator/index.ts packages/ng-client/src/lib/swagger.json packages/ng-client/src/lib/generated/models/index.ts",
+    "generate-client": "npx ts-node packages/ng-client/src/lib/generator/index.ts packages/ng-client/src/lib/swagger.json",
     "build": "tsc",
     "dev": "npm run generate-types && npm run build"
   },
   "private": true,
   "dependencies": {
+    "@angular/common": "^20.0.6",
+    "@angular/core": "^20.0.6",
+    "rxjs": "^7.8.2",
     "ts-morph": "^26.0.0"
   },
   "devDependencies": {
