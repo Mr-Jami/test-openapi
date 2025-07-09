@@ -1,59 +1,6 @@
 import * as fs from 'fs';
-import * as path from 'path';
-
-export interface SwaggerDefinition {
-    type: string;
-    properties?: Record<string, SwaggerProperty>;
-    required?: string[];
-    enum?: string[];
-    items?: SwaggerProperty;
-    allOf?: SwaggerDefinition[];
-    oneOf?: SwaggerDefinition[];
-    anyOf?: SwaggerDefinition[];
-    $ref?: string;
-}
-
-export interface SwaggerProperty {
-    type?: string;
-    format?: string;
-    $ref?: string;
-    items?: SwaggerProperty;
-    properties?: Record<string, SwaggerProperty>;
-    required?: string[];
-    enum?: string[];
-    description?: string;
-    example?: any;
-    allOf?: SwaggerDefinition[];
-    oneOf?: SwaggerDefinition[];
-    anyOf?: SwaggerDefinition[];
-}
-
-export interface SwaggerSpec {
-    definitions?: Record<string, SwaggerDefinition>;
-    components?: {
-        schemas?: Record<string, SwaggerDefinition>;
-    };
-    info?: {
-        title?: string;
-        version?: string;
-    };
-}
-
-// Add to the SwaggerSpec interface
-export interface SwaggerSpec {
-    definitions?: Record<string, SwaggerDefinition>;
-    components?: {
-        schemas?: Record<string, SwaggerDefinition>;
-    };
-    paths?: Record<string, any>;
-    info?: {
-        title?: string;
-        version?: string;
-    };
-    basePath?: string;
-    host?: string;
-    schemes?: string[];
-}
+import {SwaggerSpec} from "./interfaces/swaggerSpec";
+import {SwaggerDefinition} from "./interfaces/swaggerDefinition";
 
 export class SwaggerParser {
     private spec: SwaggerSpec;

@@ -11,6 +11,7 @@
   "dependencies": {
     "@angular/common": "^20.0.6",
     "@angular/core": "^20.0.6",
+    "@types/swagger-schema-official": "^2.0.25",
     "rxjs": "^7.8.2",
     "ts-morph": "^26.0.0"
   },

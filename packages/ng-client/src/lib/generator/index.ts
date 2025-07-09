@@ -1,8 +1,9 @@
-import * as path from 'path';
-import { TypeGenerator } from './type-generator';
-import { ServiceGenerator } from './service-generator';
-import { Project } from 'ts-morph';
-import {ServiceIndexGenerator} from "./service-indes-generator";
+import {TypeGenerator} from './type-generator';
+import {ServiceGenerator} from './service-generator';
+import {ModuleKind, Project, ScriptTarget} from 'ts-morph';
+import {ServiceIndexGenerator} from "./service-index-generator";
+import {TokenGenerator} from "./token-generator";
+import {GENERATOR_CONFIG} from "./GENERATOR_CONFIG";
 
 export interface GeneratorOptions {
     generateTypes?: boolean;
@@ -23,33 +24,27 @@ export function generateFromSwagger(
     } = options;
 
     try {
-        console.log('Starting generation from Swagger spec...');
-
         const project = new Project({
             compilerOptions: {
                 declaration: true,
-                target: 2, // ES2015
-                module: 1, // CommonJS
+                target: ScriptTarget.ES2022, // default angular target
+                module: ModuleKind.Preserve, // default angular module
                 strict: true,
+                ...GENERATOR_CONFIG.compilerOptions
             },
         });
 
         if (generateTypes) {
-            console.log('Generating TypeScript interfaces...');
             const typeGenerator = new TypeGenerator(swaggerPath, typesOutput);
             typeGenerator.generate();
             console.log(`✅ TypeScript interfaces generated at: ${typesOutput}`);
         }
 
         if (generateServices) {
-            console.log('Generating Angular services...');
-            const serviceGenerator = new ServiceGenerator(swaggerPath, project);
-            serviceGenerator.generate(servicesOutput);
-            console.log(`✅ Angular services generated at: ${servicesOutput}`);
-        }
+            // Generate tokens first
+            const tokenGenerator = new TokenGenerator(project);
+            tokenGenerator.generate(servicesOutput);
 
-        if (generateServices) {
-            console.log('Generating Angular services...');
             const serviceGenerator = new ServiceGenerator(swaggerPath, project);
             serviceGenerator.generate(servicesOutput);
 
