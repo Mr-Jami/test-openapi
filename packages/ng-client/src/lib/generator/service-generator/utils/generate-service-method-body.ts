@@ -1,86 +1,115 @@
-import {PathInfo} from "../../interfaces/pathInfo";
-import {getFormDataFields, isBlobResponse, isMultipartFormData} from "./generate-service-method";
+import { PathInfo } from "../../interfaces/pathInfo";
+import { getFormDataFields, isBlobResponse, isMultipartFormData } from "./generate-service-method";
+
+interface MethodGenerationContext {
+    pathParams: Array<{ name: string; in: string }>;
+    queryParams: Array<{ name: string; in: string }>;
+    hasBody: boolean;
+    isMultipart: boolean;
+    formDataFields: string[];
+    isBlob: boolean;
+}
 
 export function generateMethodBody(operation: PathInfo): string {
-    const pathParams = operation.parameters?.filter(p => p.in === 'path') || [];
-    const queryParams = operation.parameters?.filter(p => p.in === 'query') || [];
-    const hasBody = !!operation.requestBody;
-    const isMultipart = isMultipartFormData(operation);
-    const formDataFields = getFormDataFields(operation);
-    const isBlob = isBlobResponse(operation);
+    const context = createGenerationContext(operation);
 
-    let body = '';
+    const bodyParts = [
+        generateUrlConstruction(operation, context),
+        generateQueryParams(context),
+        generateMultipartFormData(operation, context),
+        generateRequestOptions(context),
+        generateHttpRequest(operation)
+    ];
 
-    // Build URL
+    return bodyParts.filter(Boolean).join('\n');
+}
+
+function createGenerationContext(operation: PathInfo): MethodGenerationContext {
+    return {
+        pathParams: operation.parameters?.filter(p => p.in === 'path') || [],
+        queryParams: operation.parameters?.filter(p => p.in === 'query') || [],
+        hasBody: !!operation.requestBody,
+        isMultipart: isMultipartFormData(operation),
+        formDataFields: getFormDataFields(operation),
+        isBlob: isBlobResponse(operation)
+    };
+}
+
+function generateUrlConstruction(operation: PathInfo, context: MethodGenerationContext): string {
     let urlExpression = `\`\${this.basePath}${operation.path}\``;
-    if (pathParams.length > 0) {
-        pathParams.forEach(param => {
+
+    if (context.pathParams.length > 0) {
+        context.pathParams.forEach(param => {
             urlExpression = urlExpression.replace(`{${param.name}}`, `\${${param.name}}`);
         });
     }
 
-    body += `const url = ${urlExpression};\n`;
+    return `const url = ${urlExpression};`;
+}
 
-    // Build query params
-    if (queryParams.length > 0) {
-        body += `
-let params = new HttpParams();
-${queryParams.map(param =>
-            `if (${param.name} !== undefined) {
+function generateQueryParams(context: MethodGenerationContext): string {
+    if (context.queryParams.length === 0) {
+        return '';
+    }
+
+    const paramMappings = context.queryParams.map(param =>
+        `if (${param.name} !== undefined) {
   params = params.set('${param.name}', String(${param.name}));
-}`).join('\n')}`;
+}`
+    ).join('\n');
+
+    return `
+let params = new HttpParams();
+${paramMappings}`;
+}
+
+function generateMultipartFormData(operation: PathInfo, context: MethodGenerationContext): string {
+    if (!context.isMultipart || context.formDataFields.length === 0) {
+        return '';
     }
 
-    // Handle multipart form data
-    if (isMultipart && formDataFields.length > 0) {
-        body += `
+    const formDataAppends = context.formDataFields.map(field => {
+        const fieldSchema = operation.requestBody?.content?.["multipart/form-data"]?.schema?.properties?.[field];
+        const isFile = fieldSchema?.type === 'string' && fieldSchema?.format === 'binary';
+
+        const valueExpression = isFile ? field : `String(${field})`;
+
+        return `if (${field} !== undefined) {
+  formData.append('${field}', ${valueExpression});
+}`;
+    }).join('\n');
+
+    return `
 const formData = new FormData();
-${formDataFields.map(field => {
-            const fieldSchema = operation.requestBody?.content?.["multipart/form-data"]?.schema?.properties?.[field];
-            const isFile = fieldSchema?.type === 'string' && fieldSchema?.format === 'binary';
+${formDataAppends}`;
+}
 
-            if (isFile) {
-                return `if (${field} !== undefined) {
-  formData.append('${field}', ${field});
-}`;
-            } else {
-                return `if (${field} !== undefined) {
-  formData.append('${field}', String(${field}));
-}`;
-            }
-        }).join('\n')}`;
+function generateRequestOptions(context: MethodGenerationContext): string {
+    const options = ['...options', 'observe: observe || "body"'];
+
+    if (context.queryParams.length > 0) {
+        options.push('params');
     }
 
-    // Build request options
-    if (hasBody) {
-        if (isMultipart) {
-            body += `
-const requestOptions = {
-  ...options,${queryParams.length > 0 ? '\n  params,' : ''}
-  body: formData,${isBlob ? '\n  responseType: "blob" as "json",' : ''}
-};
-`;
-        } else {
-            body += `
-const requestOptions = {
-  ...options,${queryParams.length > 0 ? '\n  params,' : ''}
-  body: body,${isBlob ? '\n  responseType: "blob" as "json",' : ''}
-};
-`;
-        }
-    } else {
-        body += `
-const requestOptions = {
-  ...options,${queryParams.length > 0 ? '\n  params,' : ''}${isBlob ? '\n  responseType: "blob" as "json",' : ''}
-};
-`;
+    if (context.hasBody) {
+        const bodyValue = context.isMultipart ? 'formData' : 'body';
+        options.push(`body: ${bodyValue}`);
     }
 
-    // Make HTTP request
+    if (context.isBlob) {
+        options.push('responseType: "blob" as "json"');
+    }
+
+    const formattedOptions = options.join(',\n  ');
+
+    return `
+const requestOptions = {
+  ${formattedOptions}
+};`;
+}
+
+function generateHttpRequest(operation: PathInfo): string {
     const httpMethod = operation.method.toLowerCase();
-
-    body += `
+    return `
 return this.httpClient.${httpMethod}(url, requestOptions);`;
-
-    return body;
 }

@@ -2,6 +2,7 @@ import {PathInfo} from "../../interfaces/pathInfo";
 import {getTypeScriptType} from "../../utils/getTypeScriptType";
 import {getRequestBodyType, getResponseType} from "./generate-service-method";
 import {OptionalKind, ParameterDeclarationStructure} from "ts-morph";
+import {camelCase} from "../../utils/camelCase";
 
 export function generateMethodParameters(operation: PathInfo): OptionalKind<ParameterDeclarationStructure>[] {
     const params = generateApiParameters(operation);
@@ -40,7 +41,7 @@ export function generateApiParameters(operation: PathInfo): OptionalKind<Paramet
     if (operation.requestBody && operation.requestBody?.content?.["application/json"]) {
         const bodyType = getRequestBodyType(operation.requestBody);
         params.push({
-            name: 'body',
+            name: camelCase(bodyType),
             type: bodyType,
             hasQuestionToken: !operation.requestBody.required,
         });
