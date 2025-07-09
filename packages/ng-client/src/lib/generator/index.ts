@@ -1,7 +1,7 @@
 import {TypeGenerator} from './type-generator';
-import {ServiceGenerator} from './service-generator';
+import {ServiceGenerator} from './service-generator/service-generator';
 import {ModuleKind, Project, ScriptTarget} from 'ts-morph';
-import {ServiceIndexGenerator} from "./service-index-generator";
+import {ServiceIndexGenerator} from "./service-generator/service-index-generator";
 import {TokenGenerator} from "./token-generator";
 import {GENERATOR_CONFIG} from "./GENERATOR_CONFIG";
 

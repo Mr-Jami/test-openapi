@@ -1,7 +1,7 @@
 import {Project} from 'ts-morph';
 import * as fs from 'fs';
 import * as path from 'path';
-import {SERVICE_INDEX_GENERATOR_HEADER_COMMENT} from "./constants";
+import {SERVICE_INDEX_GENERATOR_HEADER_COMMENT} from "../constants";
 
 export class ServiceIndexGenerator {
     private project: Project;
