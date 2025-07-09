@@ -9,7 +9,19 @@ export function generateMethodParameters(operation: PathInfo): OptionalKind<Para
     const optionsParam = addOptionsParameter(); //TODO: support other than json response type
 
     // Combine all parameters
-    return [...params, ...optionsParam];
+    const combined = [...params, ...optionsParam];
+
+    const seen = new Set<string>();
+    const uniqueParams: OptionalKind<ParameterDeclarationStructure>[] = [];
+
+    for (const param of combined) {
+        if (!seen.has(param.name)) {
+            seen.add(param.name);
+            uniqueParams.push(param);
+        }
+    }
+
+    return uniqueParams;
 }
 
 export function generateApiParameters(operation: PathInfo): OptionalKind<ParameterDeclarationStructure>[] {

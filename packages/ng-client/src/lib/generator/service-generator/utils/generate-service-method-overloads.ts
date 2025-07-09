@@ -29,7 +29,19 @@ export function generateOverloadParameters(operation: PathInfo, observe: "body" 
     const params = generateApiParameters(operation);
     const optionsParam = addOverloadOptionsParameter(observe, responseType);
     // Combine all parameters
-    return [...params, ...optionsParam];
+    const combined = [...params, ...optionsParam];
+
+    const seen = new Set<string>();
+    const uniqueParams: OptionalKind<ParameterDeclarationStructure>[] = [];
+
+    for (const param of combined) {
+        if (!seen.has(param.name)) {
+            seen.add(param.name);
+            uniqueParams.push(param);
+        }
+    }
+
+    return uniqueParams;
 }
 
 export function addOverloadOptionsParameter(observe: "body" | "response" | "events", responseType: 'json' | 'arraybuffer' | 'blob' | 'text'): OptionalKind<ParameterDeclarationStructure>[] {

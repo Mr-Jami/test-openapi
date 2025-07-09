@@ -1,5 +1,7 @@
 import { PathInfo } from "../../interfaces/pathInfo";
-import { getFormDataFields, isBlobResponse, isMultipartFormData } from "./generate-service-method";
+import {getFormDataFields, getRequestBodyType, isBlobResponse, isMultipartFormData} from "./generate-service-method";
+import {OptionalKind, ParameterDeclarationStructure} from "ts-morph";
+import {camelCase} from "../../utils/camelCase";
 
 interface MethodGenerationContext {
     pathParams: Array<{ name: string; in: string }>;
@@ -10,14 +12,14 @@ interface MethodGenerationContext {
     isBlob: boolean;
 }
 
-export function generateMethodBody(operation: PathInfo): string {
+export function generateMethodBody(operation: PathInfo, parameters: OptionalKind<ParameterDeclarationStructure>[]): string {
     const context = createGenerationContext(operation);
 
     const bodyParts = [
         generateUrlConstruction(operation, context),
         generateQueryParams(context),
         generateMultipartFormData(operation, context),
-        generateRequestOptions(context),
+        generateRequestOptions(operation, context, parameters),
         generateHttpRequest(operation)
     ];
 
@@ -84,16 +86,22 @@ const formData = new FormData();
 ${formDataAppends}`;
 }
 
-function generateRequestOptions(context: MethodGenerationContext): string {
+function generateRequestOptions(operation: PathInfo, context: MethodGenerationContext, parameters: OptionalKind<ParameterDeclarationStructure>[]): string {
     const options = ['...options', 'observe: observe || "body"'];
 
     if (context.queryParams.length > 0) {
         options.push('params');
     }
 
-    if (context.hasBody) {
-        const bodyValue = context.isMultipart ? 'formData' : 'body';
-        options.push(`body: ${bodyValue}`);
+    if (context.hasBody && context.isMultipart) {
+        options.push(`body: formData`);
+    }
+
+    if (context.hasBody && !context.isMultipart) {
+        if (operation.requestBody && operation.requestBody?.content?.["application/json"]) {
+            const bodyType = getRequestBodyType(operation.requestBody);
+            options.push(`body: ${camelCase(bodyType)}`);
+        }
     }
 
     if (context.isBlob) {

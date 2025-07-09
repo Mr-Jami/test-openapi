@@ -14,7 +14,7 @@ export function addServiceMethod(serviceClass: ClassDeclaration, operation: Path
     const methodName = generateMethodName(operation);
     const parameters = generateMethodParameters(operation);
     const returnType = generateReturnType();
-    const methodBody = generateMethodBody(operation);
+    const methodBody = generateMethodBody(operation, parameters);
     const methodOverLoads = generateMethodOverloads(parameters, operation);
 
     serviceClass.addMethod({
