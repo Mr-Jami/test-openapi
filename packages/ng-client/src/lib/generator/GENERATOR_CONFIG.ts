@@ -15,6 +15,7 @@ export const GENERATOR_CONFIG: GeneratorConfig = {
         generateComments: true,
         baseUrl: '/api',
         includeHttpOptions: true,
+        operationIdSeparator: "_"
     },
     compilerOptions: {
         declaration: true,

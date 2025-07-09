@@ -7,6 +7,7 @@ import {Parameter} from "./interfaces/parameter";
 import {RequestBody} from "./interfaces/requestBody";
 import {Response} from "./interfaces/response";
 import {SwaggerSpec} from "./interfaces/swaggerSpec";
+import {GENERATOR_CONFIG} from "./GENERATOR_CONFIG";
 
 export class ServiceGenerator {
     private project: Project;
@@ -79,7 +80,8 @@ export class ServiceGenerator {
                 controllerName = path.tags[0];
             } else if (path.operationId) {
                 // Extract controller from operationId (e.g., "UserController_getUser" -> "User")
-                const match = path.operationId.match(/^(\w+)Controller_/);
+                const regex = new RegExp(`^(\\w+)${GENERATOR_CONFIG.options.operationIdSeparator}`);
+                const match = path.operationId.match(regex);
                 if (match) {
                     controllerName = match[1];
                 }
@@ -279,8 +281,8 @@ export class ServiceGenerator {
 
     private generateMethodName(operation: PathInfo): string {
         if (operation.operationId) {
-            // Remove controller prefix if present
-            const name = operation.operationId.replace(/^\w+Controller_/, '');
+            const regex = new RegExp(`^(\\w+)${GENERATOR_CONFIG.options.operationIdSeparator}`);
+            const name = operation.operationId.replace(regex, '');
             return this.camelCase(name);
         }
 
@@ -316,14 +318,14 @@ export class ServiceGenerator {
 
         // Query parameters
         const queryParams = operation.parameters?.filter(p => p.in === 'query') || [];
-        if (queryParams.length > 0) {
-            const queryType = this.generateQueryParamsInterface(queryParams);
+        queryParams.forEach(param => {
             params.push({
-                name: 'queryParams',
-                type: queryType,
-                hasQuestionToken: true,
+                name: param.name,
+                type: this.getTypeScriptType(param.schema || param),
+                hasQuestionToken: !param.required,
             });
-        }
+        });
+
 
         // Options parameter
         params.push({
@@ -333,16 +335,6 @@ export class ServiceGenerator {
         });
 
         return params;
-    }
-
-    private generateQueryParamsInterface(queryParams: Parameter[]): string {
-        const properties = queryParams.map(param => {
-            const optional = param.required ? '' : '?';
-            const type = this.getTypeScriptType(param.schema || param);
-            return `${param.name}${optional}: ${type}`;
-        }).join('; ');
-
-        return `{ ${properties} }`;
     }
 
     private generateReturnType(operation: PathInfo): string {
@@ -377,14 +369,10 @@ export class ServiceGenerator {
         if (queryParams.length > 0) {
             body += `
 let params = new HttpParams();
-if (queryParams) {
 ${queryParams.map(param =>
-                `  if (queryParams.${param.name} !== undefined) {
-    params = params.set('${param.name}', String(queryParams.${param.name}));
-  }`
-            ).join('\n')}
-}
-`;
+                `if (${param.name} !== undefined) {
+  params = params.set('${param.name}', String(${param.name}));
+}`).join('\n')}`;
         }
 
         // Build request options
@@ -462,7 +450,8 @@ return this.http.${httpMethod}<${this.generateReturnType(operation).replace('Obs
     }
 
     private camelCase(str: string): string {
-        return str.replace(/[-_]([a-z])/g, (_, char) => char.toUpperCase());
+        const cleaned = str.replace(/[-_](\w)/g, (_, c) => c.toUpperCase());
+        return cleaned.charAt(0).toLowerCase() + cleaned.slice(1);
     }
 
     private kebabCase(str: string): string {

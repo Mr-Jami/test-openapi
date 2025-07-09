@@ -15,6 +15,7 @@ export interface GeneratorConfig {
         fileHeader?: string;
         baseUrl?: string;
         includeHttpOptions?: boolean;
+        operationIdSeparator?: string;
     };
     compilerOptions?: {
         declaration?: boolean;
