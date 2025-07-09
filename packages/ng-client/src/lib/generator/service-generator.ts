@@ -108,13 +108,98 @@ export class ServiceGenerator {
 
         const sourceFile = this.project.createSourceFile(filePath, '', {overwrite: true});
 
-        this.addImports(sourceFile);
+        // Collect all used model types first
+        const usedTypes = this.collectUsedTypes(operations);
+
+        this.addImports(sourceFile, usedTypes);
         this.addServiceClass(sourceFile, controllerName, operations);
 
         sourceFile.saveSync();
     }
 
-    private addImports(sourceFile: SourceFile): void {
+    private collectUsedTypes(operations: PathInfo[]): Set<string> {
+        const usedTypes = new Set<string>();
+
+        operations.forEach(operation => {
+            // Check parameters
+            operation.parameters?.forEach(param => {
+                this.collectTypesFromSchema(param.schema || param, usedTypes);
+            });
+
+            // Check request body
+            if (operation.requestBody) {
+                this.collectTypesFromRequestBody(operation.requestBody, usedTypes);
+            }
+
+            // Check responses
+            if (operation.responses) {
+                Object.values(operation.responses).forEach(response => {
+                    this.collectTypesFromResponse(response, usedTypes);
+                });
+            }
+        });
+
+        return usedTypes;
+    }
+
+    private collectTypesFromSchema(schema: any, usedTypes: Set<string>): void {
+        if (!schema) return;
+
+        if (schema.$ref) {
+            const refName = schema.$ref.split('/').pop();
+            if (refName) {
+                usedTypes.add(this.pascalCase(refName));
+            }
+        }
+
+        if (schema.type === 'array' && schema.items) {
+            this.collectTypesFromSchema(schema.items, usedTypes);
+        }
+
+        if (schema.type === 'object' && schema.properties) {
+            Object.values(schema.properties).forEach(prop => {
+                this.collectTypesFromSchema(prop, usedTypes);
+            });
+        }
+
+        if (schema.allOf) {
+            schema.allOf.forEach((subSchema: any) => {
+                this.collectTypesFromSchema(subSchema, usedTypes);
+            });
+        }
+
+        if (schema.oneOf) {
+            schema.oneOf.forEach((subSchema: any) => {
+                this.collectTypesFromSchema(subSchema, usedTypes);
+            });
+        }
+
+        if (schema.anyOf) {
+            schema.anyOf.forEach((subSchema: any) => {
+                this.collectTypesFromSchema(subSchema, usedTypes);
+            });
+        }
+    }
+
+    private collectTypesFromRequestBody(requestBody: RequestBody, usedTypes: Set<string>): void {
+        const content = requestBody.content || {};
+        Object.values(content).forEach(mediaType => {
+            if (mediaType.schema) {
+                this.collectTypesFromSchema(mediaType.schema, usedTypes);
+            }
+        });
+    }
+
+    private collectTypesFromResponse(response: Response, usedTypes: Set<string>): void {
+        const content = response.content || {};
+        Object.values(content).forEach(mediaType => {
+            if (mediaType.schema) {
+                this.collectTypesFromSchema(mediaType.schema, usedTypes);
+            }
+        });
+    }
+
+    private addImports(sourceFile: SourceFile, usedTypes: Set<string>): void {
         sourceFile.addImportDeclarations([
             {
                 namedImports: ['Injectable', "inject"],
@@ -129,14 +214,18 @@ export class ServiceGenerator {
                 moduleSpecifier: 'rxjs',
             },
             {
-                namespaceImport: 'Models',
-                moduleSpecifier: '../models',
-            },
-            {
                 namedImports: ['BASE_PATH'],
                 moduleSpecifier: '../tokens',
             },
         ]);
+
+        // Add specific model imports only if types are used
+        if (usedTypes.size > 0) {
+            sourceFile.addImportDeclaration({
+                namedImports: Array.from(usedTypes).sort(),
+                moduleSpecifier: '../models',
+            });
+        }
     }
 
     private addServiceClass(sourceFile: SourceFile, controllerName: string, operations: PathInfo[]): void {
@@ -345,7 +434,7 @@ return this.http.${httpMethod}<${this.generateReturnType(operation).replace('Obs
 
         if (schema.$ref) {
             const refName = schema.$ref.split('/').pop();
-            return `Models.${this.pascalCase(refName)}`;
+            return this.pascalCase(refName);
         }
 
         if (schema.type === 'array') {
