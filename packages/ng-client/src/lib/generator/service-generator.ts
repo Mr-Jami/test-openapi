@@ -307,7 +307,16 @@ export class ServiceGenerator {
         });
 
         // Request body
-        if (operation.requestBody) {
+        if (operation.requestBody && operation.requestBody?.content?.["multipart/form-data"]) {
+            // For multipart/form-data, add individual parameters for each field
+            Object.entries(operation.requestBody?.content?.["multipart/form-data"].schema?.properties ?? {}).forEach(([key, value]) => {
+                params.push({
+                    name: key,
+                    type: this.getTypeScriptType(value, value.nullable),
+                    hasQuestionToken: !value.required,
+                });
+            })
+        } else if (operation.requestBody){
             const bodyType = this.getRequestBodyType(operation.requestBody);
             params.push({
                 name: 'body',
@@ -325,7 +334,6 @@ export class ServiceGenerator {
                 hasQuestionToken: !param.required,
             });
         });
-
 
         // Options parameter
         params.push({
@@ -348,10 +356,26 @@ export class ServiceGenerator {
         return `Observable<${responseType}>`;
     }
 
+    private isMultipartFormData(operation: PathInfo): boolean {
+        return !!(operation.requestBody?.content?.["multipart/form-data"]);
+    }
+
+    private getFormDataFields(operation: PathInfo): string[] {
+        if (!this.isMultipartFormData(operation)) {
+            return [];
+        }
+
+        const properties = operation.requestBody?.content?.["multipart/form-data"]?.schema?.properties || {};
+        return Object.keys(properties);
+    }
+
     private generateMethodBody(operation: PathInfo): string {
         const pathParams = operation.parameters?.filter(p => p.in === 'path') || [];
         const queryParams = operation.parameters?.filter(p => p.in === 'query') || [];
         const hasBody = !!operation.requestBody;
+        const isMultipart = this.isMultipartFormData(operation);
+        const formDataFields = this.getFormDataFields(operation);
+        const isBlobResponse = this.isBlobResponse(operation);
 
         let body = '';
 
@@ -375,24 +399,82 @@ ${queryParams.map(param =>
 }`).join('\n')}`;
         }
 
+        // Handle multipart form data
+        if (isMultipart && formDataFields.length > 0) {
+            body += `
+const formData = new FormData();
+${formDataFields.map(field => {
+                const fieldSchema = operation.requestBody?.content?.["multipart/form-data"]?.schema?.properties?.[field];
+                const isFile = fieldSchema?.type === 'string' && fieldSchema?.format === 'binary';
+
+                if (isFile) {
+                    return `if (${field} !== undefined) {
+  formData.append('${field}', ${field});
+}`;
+                } else {
+                    return `if (${field} !== undefined) {
+  formData.append('${field}', String(${field}));
+}`;
+                }
+            }).join('\n')}`;
+        }
+
         // Build request options
-        body += `
+        if (hasBody) {
+            if (isMultipart) {
+                body += `
 const requestOptions = {
   ...options,${queryParams.length > 0 ? '\n  params,' : ''}
+  body: formData,${isBlobResponse ? '\n  responseType: "blob" as "json",' : ''}
 };
 `;
+            } else {
+                body += `
+const requestOptions = {
+  ...options,${queryParams.length > 0 ? '\n  params,' : ''}
+  body: body,${isBlobResponse ? '\n  responseType: "blob" as "json",' : ''}
+};
+`;
+            }
+        } else {
+            body += `
+const requestOptions = {
+  ...options,${queryParams.length > 0 ? '\n  params,' : ''}${isBlobResponse ? '\n  responseType: "blob" as "json",' : ''}
+};
+`;
+        }
 
         // Make HTTP request
         const httpMethod = operation.method.toLowerCase();
-        if (hasBody) {
-            body += `
-return this.http.${httpMethod}<${this.generateReturnType(operation).replace('Observable<', '').replace('>', '')}>(url, body, requestOptions);`;
-        } else {
-            body += `
-return this.http.${httpMethod}<${this.generateReturnType(operation).replace('Observable<', '').replace('>', '')}>(url, requestOptions);`;
-        }
+        const responseType = this.generateReturnType(operation).replace('Observable<', '').replace('>', '');
+
+        body += `
+return this.http.${httpMethod}<${responseType}>(url, requestOptions);`;
 
         return body;
+    }
+
+    private isBlobResponse(operation: PathInfo): boolean {
+        // Check all success response codes
+        const successResponses = ['200', '201', '202', '204'];
+
+        for (const statusCode of successResponses) {
+            const response = operation.responses?.[statusCode];
+            if (!response?.content) {
+                continue;
+            }
+
+            const content = response.content;
+
+            // Check all content types for binary format
+            for (const [contentType, mediaType] of Object.entries(content)) {
+                if (mediaType?.schema?.format === 'binary') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private getRequestBodyType(requestBody: RequestBody): string {
@@ -400,7 +482,7 @@ return this.http.${httpMethod}<${this.generateReturnType(operation).replace('Obs
         const jsonContent = content['application/json'];
 
         if (jsonContent?.schema) {
-            return this.getTypeScriptType(jsonContent.schema);
+            return this.getTypeScriptType(jsonContent.schema, jsonContent.schema.nullable);
         }
 
         return 'any';
@@ -408,21 +490,29 @@ return this.http.${httpMethod}<${this.generateReturnType(operation).replace('Obs
 
     private getResponseType(response: Response): string {
         const content = response.content || {};
-        const jsonContent = content['application/json'];
 
+        // Check all content types for binary format
+        for (const [contentType, mediaType] of Object.entries(content)) {
+            if (mediaType?.schema?.format === 'binary') {
+                return 'Blob';
+            }
+        }
+
+        // Check for JSON content (non-binary)
+        const jsonContent = content['application/json'] || content['text/json'];
         if (jsonContent?.schema) {
-            return this.getTypeScriptType(jsonContent.schema);
+            return this.getTypeScriptType(jsonContent.schema, jsonContent.schema.nullable);
         }
 
         return 'any';
     }
 
-    private getTypeScriptType(schema: any): string {
+    private getTypeScriptType(schema: any, nullable?: boolean): string {
         if (!schema) return 'any';
 
         if (schema.$ref) {
             const refName = schema.$ref.split('/').pop();
-            return this.pascalCase(refName);
+            return this.nullableType(this.pascalCase(refName), nullable);
         }
 
         if (schema.type === 'array') {
@@ -432,16 +522,19 @@ return this.http.${httpMethod}<${this.generateReturnType(operation).replace('Obs
 
         switch (schema.type) {
             case 'string':
-                return 'string';
+                if (schema.format === 'binary') {
+                    return this.nullableType('File', nullable);
+                }
+                return this.nullableType('string', nullable);
             case 'number':
             case 'integer':
-                return 'number';
+                return this.nullableType('number', nullable);
             case 'boolean':
-                return 'boolean';
+                return this.nullableType('boolean', nullable);
             case 'object':
-                return 'any';
+                return this.nullableType('any', nullable);
             default:
-                return 'any';
+                return this.nullableType('any', nullable);
         }
     }
 
@@ -456,5 +549,9 @@ return this.http.${httpMethod}<${this.generateReturnType(operation).replace('Obs
 
     private kebabCase(str: string): string {
         return str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+    }
+
+    private nullableType(type: string, isNullable?: boolean): string {
+        return type + (isNullable ? ' | null' : '');
     }
 }

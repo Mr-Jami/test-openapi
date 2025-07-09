@@ -1,4 +1,6 @@
+import {SwaggerDefinition} from "./swaggerDefinition";
+
 export interface RequestBody {
     required?: boolean;
-    content?: Record<string, { schema?: any }>;
+    content?: Record<string, { schema?: SwaggerDefinition }>;
 }
