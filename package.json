@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "generate-client": "npx ts-node packages/ng-client/src/lib/generator/index.ts packages/ng-client/src/lib/swagger.json",
+    "generate-client": "npx ts-node packages/ng-client/src/lib/core/generator.ts packages/ng-client/src/lib/swagger.json",
     "build": "tsc",
     "dev": "npm run generate-types && npm run build"
   },
