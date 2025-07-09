@@ -1,12 +1,13 @@
+// packages/ng-client/src/lib/generator/service-generator/utils/generate-service-method-params.ts
 import {PathInfo} from "../../interfaces/pathInfo";
 import {getTypeScriptType} from "../../utils/getTypeScriptType";
-import {getRequestBodyType, getResponseType} from "./generate-service-method";
+import {getRequestBodyType} from "./generate-service-method";
 import {OptionalKind, ParameterDeclarationStructure} from "ts-morph";
 import {camelCase} from "../../utils/camelCase";
 
 export function generateMethodParameters(operation: PathInfo): OptionalKind<ParameterDeclarationStructure>[] {
     const params = generateApiParameters(operation);
-    const optionsParam = addOptionsParameter(); //TODO: support other than json response type
+    const optionsParam = addOptionsParameter();
 
     // Combine all parameters
     const combined = [...params, ...optionsParam];
@@ -25,7 +26,7 @@ export function generateMethodParameters(operation: PathInfo): OptionalKind<Para
 }
 
 export function generateApiParameters(operation: PathInfo): OptionalKind<ParameterDeclarationStructure>[] {
-    const params: any[] = [];
+    const params: OptionalKind<ParameterDeclarationStructure>[] = [];
 
     // Path parameters
     const pathParams = operation.parameters?.filter(p => p.in === 'path') || [];
@@ -40,7 +41,7 @@ export function generateApiParameters(operation: PathInfo): OptionalKind<Paramet
     // form parameters
     if (operation.requestBody && operation.requestBody?.content?.["multipart/form-data"]) {
         // For multipart/form-data, add individual parameters for each field
-        Object.entries(operation.requestBody?.content?.["multipart/form-data"].schema?.properties ?? {}).forEach(([key, value]) => {
+        Object.entries(operation.requestBody?.content?.["multipart/form-data"].schema?.properties ?? {}).forEach(([key, value]: [string, any]) => {
             params.push({
                 name: key,
                 type: getTypeScriptType(value, value.nullable),
@@ -52,8 +53,9 @@ export function generateApiParameters(operation: PathInfo): OptionalKind<Paramet
     // body parameters
     if (operation.requestBody && operation.requestBody?.content?.["application/json"]) {
         const bodyType = getRequestBodyType(operation.requestBody);
+        const isInterface = isDataTypeInterface(bodyType);
         params.push({
-            name: camelCase(bodyType),
+            name: isInterface ? camelCase(bodyType) : 'requestBody',
             type: bodyType,
             hasQuestionToken: !operation.requestBody.required,
         });
@@ -72,25 +74,19 @@ export function generateApiParameters(operation: PathInfo): OptionalKind<Paramet
     return params;
 }
 
-export function addOptionsParameter(responseType: 'json' | 'arraybuffer' | 'blob' | 'text' = 'json'): OptionalKind<ParameterDeclarationStructure>[] {
+export function addOptionsParameter(): OptionalKind<ParameterDeclarationStructure>[] {
     return [{
         name: 'observe',
-        type: `any`,
-        initializer: "'body'"
+        type: `'body' | 'events' | 'response'`,
+        hasQuestionToken: true
     }, {
         name: 'options',
-        type: `{ headers?: HttpHeaders | { [header: string]: string | string[] }; params?: HttpParams | { [param: string]: string | string[] }; reportProgress?: boolean; responseType?: \'${responseType}\'; withCredentials?: boolean; context?: HttpContext; }`,
+        type: `{ headers?: HttpHeaders; params?: HttpParams; reportProgress?: boolean; responseType?: 'arraybuffer' | 'blob' | 'json' | 'text'; withCredentials?: boolean; context?: HttpContext; }`,
         hasQuestionToken: true,
     }];
 }
 
-export function generateOverloadReturnType(operation: PathInfo): string {
-    const response = operation.responses?.['200'] || operation.responses?.['201'] || operation.responses?.['204'];
-
-    if (!response) {
-        return 'Observable<any>';
-    }
-
-    const responseType = getResponseType(response);
-    return `Observable<${responseType}>`;
+export function isDataTypeInterface(type: string): boolean {
+    const invalidTypes = ['any', 'File', 'string', 'number', 'boolean', 'object', 'unknown', '[]', 'Array'];
+    return !invalidTypes.some(invalidType => type.includes(invalidType));
 }

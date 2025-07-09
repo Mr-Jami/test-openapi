@@ -2,6 +2,7 @@ import {Project} from 'ts-morph';
 import * as fs from 'fs';
 import * as path from 'path';
 import {SERVICE_INDEX_GENERATOR_HEADER_COMMENT} from "../constants";
+import {pascalCase} from "../utils/pascalCase";
 
 export class ServiceIndexGenerator {
     private project: Project;
@@ -23,7 +24,7 @@ export class ServiceIndexGenerator {
 
         // Add exports
         serviceFiles.forEach(serviceName => {
-            const className = this.pascalCase(serviceName) + 'Service';
+            const className = pascalCase(serviceName) + 'Service';
             sourceFile.addExportDeclaration({
                 namedExports: [className],
                 moduleSpecifier: `./${serviceName}.service`,
@@ -31,9 +32,5 @@ export class ServiceIndexGenerator {
         });
 
         sourceFile.saveSync();
-    }
-
-    private pascalCase(str: string): string {
-        return str.replace(/(?:^|[-_])([a-z])/g, (_, char) => char.toUpperCase());
     }
 }

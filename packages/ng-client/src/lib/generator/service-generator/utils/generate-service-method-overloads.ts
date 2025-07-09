@@ -1,13 +1,18 @@
-import {getResponseType} from "./generate-service-method";
+import {getResponseType, getResponseTypeFromResponse} from "./generate-service-method";
 import {PathInfo} from "../../interfaces/pathInfo";
 import {MethodDeclarationOverloadStructure, OptionalKind, ParameterDeclarationStructure} from "ts-morph";
 import {generateApiParameters} from "./generate-service-method-params";
+import {GENERATOR_CONFIG} from "../../GENERATOR_CONFIG";
 
 export function generateMethodOverloads(parameters: any[], operation: PathInfo): OptionalKind<MethodDeclarationOverloadStructure>[] {
     const observeTypes: ("body" | "response" | "events")[] = ['body', 'response', 'events'];
     const overloads: OptionalKind<MethodDeclarationOverloadStructure>[] = [];
+
+    // Determine the actual response type for this operation
+    const responseType = determineResponseTypeForOperation(operation);
+
     observeTypes.forEach(observe => {
-        const overload = generateMethodOverload(operation, observe);
+        const overload = generateMethodOverload(operation, observe, responseType);
         if (overload) {
             overloads.push(overload);
         }
@@ -15,19 +20,41 @@ export function generateMethodOverloads(parameters: any[], operation: PathInfo):
     return overloads;
 }
 
-export function generateMethodOverload(operation: PathInfo, observe: "body" | "response" | "events"): OptionalKind<MethodDeclarationOverloadStructure> {
-    const responseType = generateOverloadResponseType(operation);
-    const params = generateOverloadParameters(operation, observe, responseType === "Blob" ? 'blob' : 'json'); //TODO: support other response types
-    const returnType = generateOverloadReturnType(responseType, observe);
+function determineResponseTypeForOperation(operation: PathInfo): 'json' | 'blob' | 'arraybuffer' | 'text' {
+    const successResponses = ['200', '201', '202', '204', '206'];
+
+    for (const statusCode of successResponses) {
+        const response = operation.responses?.[statusCode];
+        if (!response) continue;
+
+        return getResponseTypeFromResponse(response, GENERATOR_CONFIG);
+    }
+
+    return 'json';
+}
+
+export function generateMethodOverload(
+    operation: PathInfo,
+    observe: "body" | "response" | "events",
+    responseType: 'json' | 'blob' | 'arraybuffer' | 'text'
+): OptionalKind<MethodDeclarationOverloadStructure> {
+    const responseDataType = generateOverloadResponseType(operation);
+    const params = generateOverloadParameters(operation, observe, responseType);
+    const returnType = generateOverloadReturnType(responseDataType, observe);
     return {
         parameters: params,
         returnType: returnType,
     }
 }
 
-export function generateOverloadParameters(operation: PathInfo, observe: "body" | "response" | "events", responseType: 'json' | 'arraybuffer' | 'blob' | 'text'): OptionalKind<ParameterDeclarationStructure>[] {
+export function generateOverloadParameters(
+    operation: PathInfo,
+    observe: "body" | "response" | "events",
+    responseType: 'json' | 'arraybuffer' | 'blob' | 'text'
+): OptionalKind<ParameterDeclarationStructure>[] {
     const params = generateApiParameters(operation);
     const optionsParam = addOverloadOptionsParameter(observe, responseType);
+
     // Combine all parameters
     const combined = [...params, ...optionsParam];
 
@@ -51,7 +78,7 @@ export function addOverloadOptionsParameter(observe: "body" | "response" | "even
         hasQuestionToken: true
     }, {
         name: 'options',
-        type: `{ headers?: HttpHeaders | { [header: string]: string | string[] }; params?: HttpParams | { [param: string]: string | string[] }; reportProgress?: boolean; responseType?: \'${responseType}\'; withCredentials?: boolean; context?: HttpContext; }`,
+        type: `{ headers?: HttpHeaders; reportProgress?: boolean; responseType?: '${responseType}'; withCredentials?: boolean; context?: HttpContext; }`,
         hasQuestionToken: true,
     }];
 }
@@ -69,11 +96,11 @@ export function generateOverloadResponseType(operation: PathInfo): string {
 export function generateOverloadReturnType(responseType: string, observe: "body" | "response" | "events"): string {
     switch (observe) {
         case 'body':
-            return 'Observable<' + responseType + '>';
+            return `Observable<${responseType}>`;
         case 'response':
-            return 'Observable<HttpResponse<' + responseType + '>>';
+            return `Observable<HttpResponse<${responseType}>>`;
         case 'events':
-            return 'Observable<HttpEvent<' + responseType + '>>';
+            return `Observable<HttpEvent<${responseType}>>`;
         default:
             throw new Error(`Unsupported observe type: ${observe}`);
     }

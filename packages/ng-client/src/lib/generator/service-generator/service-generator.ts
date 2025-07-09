@@ -1,4 +1,4 @@
-import {MethodDeclarationOverloadStructure, OptionalKind, Project, Scope, SourceFile, StructureKind} from 'ts-morph';
+import {Project, Scope, SourceFile} from 'ts-morph';
 import {SwaggerParser} from '../swagger-parser';
 import * as path from 'path';
 import {SERVICE_GENERATOR_HEADER_COMMENT} from "../constants";
@@ -8,11 +8,9 @@ import {RequestBody} from "../interfaces/requestBody";
 import {Response} from "../interfaces/response";
 import {SwaggerSpec} from "../interfaces/swaggerSpec";
 import {GENERATOR_CONFIG} from "../GENERATOR_CONFIG";
-import {nullableType} from "../utils/nullableType";
 import {pascalCase} from "../utils/pascalCase";
 import {kebabCase} from "../utils/kebabCase";
 import {addServiceMethod} from "./utils/generate-service-method";
-import {getTypeScriptType} from "../utils/getTypeScriptType";
 
 export class ServiceGenerator {
     private project: Project;
@@ -246,23 +244,21 @@ export class ServiceGenerator {
             decorators: [{name: 'Injectable', arguments: ['{ providedIn: "root" }']}],
         });
 
-        serviceClass.addMember({
+        serviceClass.addProperty({
             name: "httpClient",
             type: "HttpClient",
             scope: Scope.Private,
             isReadonly: true,
-            initializer: "inject(HttpClient)",
-            kind: StructureKind.Property
-        })
+            initializer: "inject(HttpClient)"
+        });
 
-        serviceClass.addMember({
+        serviceClass.addProperty({
             name: "basePath",
             type: "string",
             scope: Scope.Private,
             isReadonly: true,
-            initializer: "inject(BASE_PATH)",
-            kind: StructureKind.Property
-        })
+            initializer: "inject(BASE_PATH)"
+        });
 
         // Generate methods for each operation
         operations.forEach(operation => {

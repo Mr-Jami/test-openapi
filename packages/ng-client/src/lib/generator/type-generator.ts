@@ -56,7 +56,7 @@ export class TypeGenerator {
     }
 
     private generateInterface(name: string, definition: SwaggerDefinition): void {
-        const interfaceName = this.pascalCase(name);
+        const interfaceName = this.pascalCaseForEnums(name);
 
         // Prevent duplicate type generation
         if (this.generatedTypes.has(interfaceName)) {
@@ -140,7 +140,7 @@ export class TypeGenerator {
 
         if (definition.allOf) {
             const types = definition.allOf
-                .map(def => this.getTypeFromDefinition(def))
+                .map(def => this.resolveSwaggerType(def))
                 .filter(type => type !== 'any' && type !== 'unknown'); // Filter out 'any' and 'unknown' types
             typeExpression = types.length > 0 ? types.join(' & ') : 'Record<string, unknown>';
         }
@@ -184,7 +184,7 @@ export class TypeGenerator {
         Object.entries(definition.properties).forEach(([propertyName, property]) => {
             const isRequired = definition.required?.includes(propertyName) ?? false;
             const isReadOnly = property.readOnly;
-            const propertyType = this.getTypeFromProperty(property);
+            const propertyType = this.resolveSwaggerType(property);
 
             // Sanitize property name for TypeScript compatibility
             const sanitizedName = this.sanitizePropertyName(propertyName);
@@ -199,106 +199,69 @@ export class TypeGenerator {
         });
     }
 
-    private getTypeFromProperty(property: SwaggerDefinition): string {
-        if (property.$ref) {
-            return this.resolveReference(property.$ref);
+    private resolveSwaggerType(schema: SwaggerDefinition): string {
+        if (schema.$ref) {
+            return this.resolveReference(schema.$ref);
         }
 
-        if (property.enum) {
-            return this.getEnumType(property.enum);
-        }
-
-        if (property.allOf) {
-            return this.composeTypeUnion(property.allOf, "&");
-        }
-
-        if (property.oneOf) {
-            return this.composeTypeUnion(property.oneOf, "|");
-        }
-
-        if (property.anyOf) {
-            return this.composeTypeUnion(property.anyOf, "|");
-        }
-
-        if (property.type === 'array') {
-            const itemType = property.items ? this.getArrayItemType(property.items) : 'unknown';
-            return `${itemType}[]`;
-        }
-
-        if (property.type === 'object') {
-            if (property.properties) {
-                return this.generateInlineObjectType(property);
-            }
-            if (property.additionalProperties) {
-                const additionalType = typeof property.additionalProperties === 'object'
-                    ? this.getTypeFromProperty(property.additionalProperties)
-                    : 'unknown';
-                return `Record<string, ${additionalType}>`;
-            }
-            return 'Record<string, unknown>';
-        }
-
-        return this.mapSwaggerTypeToTypeScript(property.type, property.format, property.nullable);
-    }
-
-    private composeTypeUnion(defs: SwaggerDefinition[], joiner: '|' | '&'): string {
-        const types = defs
-            .map(def => this.getTypeFromDefinition(def))
-            .filter(type => type !== 'any' && type !== 'unknown');
-        return types.length > 0 ? types.join(` ${joiner} `) : 'unknown';
-    }
-
-    private getEnumType(values: any[]): string {
-        return values
-            .map(value => typeof value === 'string' ? `'${this.escapeString(value)}'` : String(value))
-            .join(' | ');
-    }
-
-    private getTypeFromDefinition(definition: SwaggerDefinition): string {
-        if (definition.$ref) {
-            return this.resolveReference(definition.$ref);
-        }
-
-        if (definition.type === 'object' && definition.properties) {
-            return this.generateInlineObjectType(definition);
-        }
-
-        if (definition.enum) {
-            return definition.enum
+        if (schema.enum) {
+            return schema.enum
                 .map(value => typeof value === 'string' ? `'${this.escapeString(value)}'` : String(value))
                 .join(' | ');
         }
 
-        if (definition.allOf) {
-            const types = definition.allOf
-                .map(def => this.getTypeFromDefinition(def))
-                .filter(type => type !== 'any' && type !== 'unknown');
-            return types.length > 0 ? types.join(' & ') : 'Record<string, unknown>';
+        if (schema.allOf) {
+            return schema.allOf
+                .map(def => this.resolveSwaggerType(def))
+                .filter(type => type !== 'any' && type !== 'unknown')
+                .join(' & ') || 'Record';
         }
 
-        if (definition.oneOf) {
-            const types = definition.oneOf
-                .map(def => this.getTypeFromDefinition(def))
-                .filter(type => type !== 'any' && type !== 'unknown');
-            return types.length > 0 ? types.join(' | ') : 'unknown';
+        if (schema.oneOf) {
+            return schema.oneOf
+                .map(def => this.resolveSwaggerType(def))
+                .filter(type => type !== 'any' && type !== 'unknown')
+                .join(' | ') || 'unknown';
         }
 
-        if (definition.anyOf) {
-            const types = definition.anyOf
-                .map(def => this.getTypeFromDefinition(def))
-                .filter(type => type !== 'any' && type !== 'unknown');
-            return types.length > 0 ? types.join(' | ') : 'unknown';
+        if (schema.anyOf) {
+            return schema.anyOf
+                .map(def => this.resolveSwaggerType(def))
+                .filter(type => type !== 'any' && type !== 'unknown')
+                .join(' | ') || 'unknown';
         }
 
-        return this.mapSwaggerTypeToTypeScript(definition.type, definition.format, definition.nullable);
+        if (schema.type === 'array') {
+            const itemType = schema.items ? this.getArrayItemType(schema.items) : 'unknown';
+            return `${itemType}[]`;
+        }
+
+        if (schema.type === 'object') {
+            if (schema.properties) {
+                return this.generateInlineObjectType(schema);
+            }
+
+            if (schema.additionalProperties) {
+                const valueType = typeof schema.additionalProperties === 'object'
+                    ? this.resolveSwaggerType(schema.additionalProperties)
+                    : 'unknown';
+                return `Record<string, ${valueType}>`;
+            }
+
+            return 'Record<string, unknown>';
+        }
+
+        // Simple scalar types
+        return this.mapSwaggerTypeToTypeScript(schema.type, schema.format, schema.nullable);
     }
+
 
     private generateInlineObjectType(definition: SwaggerDefinition): string {
         if (!definition.properties) {
             // Handle additionalProperties for objects without defined properties
             if (definition.additionalProperties) {
                 const additionalType = typeof definition.additionalProperties === 'object'
-                    ? this.getTypeFromProperty(definition.additionalProperties)
+                    ? this.resolveSwaggerType(definition.additionalProperties)
                     : 'unknown';
                 return `Record<string, ${additionalType}>`;
             }
@@ -310,7 +273,7 @@ export class TypeGenerator {
                 const isRequired = definition.required?.includes(key) ?? false;
                 const questionMark = isRequired ? '' : '?';
                 const sanitizedKey = this.sanitizePropertyName(key);
-                return `${sanitizedKey}${questionMark}: ${this.getTypeFromProperty(prop)}`;
+                return `${sanitizedKey}${questionMark}: ${this.resolveSwaggerType(prop)}`;
             })
             .join('; ');
 
@@ -327,7 +290,7 @@ export class TypeGenerator {
                 return 'unknown';
             }
 
-            const typeName = this.pascalCase(refName);
+            const typeName = this.pascalCaseForEnums(refName);
 
             // Ensure referenced type is generated
             if (refDefinition && !this.generatedTypes.has(typeName)) {
@@ -347,7 +310,8 @@ export class TypeGenerator {
         switch (type) {
             case 'string':
                 if (format === 'date' || format === 'date-time') {
-                    return this.nullableType('string', isNullable); // Consider using Date if you prefer
+                    const dateType = GENERATOR_CONFIG.options.dateType === 'Date' ? 'Date' : 'string';
+                    return this.nullableType(dateType, isNullable);
                 }
                 if (format === 'binary') return 'Blob';
                 if (format === 'uuid') return 'string';
@@ -375,7 +339,7 @@ export class TypeGenerator {
         return type + (isNullable ? ' | null' : '');
     }
 
-    private pascalCase(str: string): string {
+    private pascalCaseForEnums(str: string): string {
         return str
             .replace(/[^a-zA-Z0-9]/g, '_')
             .replace(/(?:^|_)([a-z])/g, (_, char) => char.toUpperCase())
@@ -400,11 +364,11 @@ export class TypeGenerator {
     private getArrayItemType(items: SwaggerDefinition | SwaggerDefinition[]): string {
         if (Array.isArray(items)) {
             // Handle tuple types - items is an array of schemas
-            const types = items.map(item => this.getTypeFromProperty(item));
+            const types = items.map(item => this.resolveSwaggerType(item));
             return `[${types.join(', ')}]`;
         } else {
             // Handle single item type
-            return this.getTypeFromProperty(items);
+            return this.resolveSwaggerType(items);
         }
     }
 

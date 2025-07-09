@@ -4,6 +4,8 @@ import {ModuleKind, Project, ScriptTarget} from 'ts-morph';
 import {ServiceIndexGenerator} from "./service-generator/service-index-generator";
 import {TokenGenerator} from "./token-generator";
 import {GENERATOR_CONFIG} from "./GENERATOR_CONFIG";
+import {DateTransformer} from "./date-transformer";
+import {FileDownloadHelper} from "./service-generator/utils/file-download-helper";
 
 export interface GeneratorOptions {
     generateTypes?: boolean;
@@ -27,8 +29,8 @@ export function generateFromSwagger(
         const project = new Project({
             compilerOptions: {
                 declaration: true,
-                target: ScriptTarget.ES2022, // default angular target
-                module: ModuleKind.Preserve, // default angular module
+                target: ScriptTarget.ES2022,
+                module: ModuleKind.Preserve,
                 strict: true,
                 ...GENERATOR_CONFIG.compilerOptions
             },
@@ -45,6 +47,18 @@ export function generateFromSwagger(
             const tokenGenerator = new TokenGenerator(project);
             tokenGenerator.generate(servicesOutput);
 
+            // Generate date transformer if enabled
+            if (GENERATOR_CONFIG.options.dateTransformer) {
+                const dateTransformer = new DateTransformer(project);
+                dateTransformer.generate(servicesOutput);
+                console.log(`✅ Date transformer generated`);
+            }
+
+            // Generate file download helper
+            const fileDownloadHelper = new FileDownloadHelper(project);
+            fileDownloadHelper.generate(servicesOutput);
+            console.log(`✅ File download helper generated`);
+
             const serviceGenerator = new ServiceGenerator(swaggerPath, project);
             serviceGenerator.generate(servicesOutput);
 
@@ -54,7 +68,6 @@ export function generateFromSwagger(
 
             console.log(`✅ Angular services generated at: ${servicesOutput}`);
         }
-
 
         console.log('🎉 Generation completed successfully!');
     } catch (error) {

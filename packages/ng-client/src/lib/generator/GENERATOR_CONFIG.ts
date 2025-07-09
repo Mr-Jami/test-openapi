@@ -10,12 +10,23 @@ export const GENERATOR_CONFIG: GeneratorConfig = {
     options: {
         enumStyle: 'enum',
         generateEnumBasedOnDescription: true,
-        dateType: 'string',
+        dateType: 'Date', // Changed to Date
+        dateTransformer: true, // Enable date transformer
         nullableStyle: 'undefined',
         generateComments: true,
         baseUrl: '/api',
         includeHttpOptions: true,
-        operationIdSeparator: "_"
+        operationIdSeparator: "_",
+        customHeaders: { // Add default custom headers
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        },
+        responseTypeMapping: { // Add response type mappings
+            'application/pdf': 'blob',
+            'application/zip': 'blob',
+            'text/csv': 'text',
+            'application/vnd.ms-excel': 'blob'
+        }
     },
     compilerOptions: {
         declaration: true,
