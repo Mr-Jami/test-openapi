@@ -7,20 +7,14 @@ export interface GeneratorConfig {
         services: string;
     };
     options: {
-        enumStyle: 'enum' | 'union';
+        enumStyle: 'enum' | 'union'; //TODO: add implementation
         generateEnumBasedOnDescription?: boolean;
         dateType: 'string' | 'Date';
-        dateTransformer?: boolean; // New option
-        nullableStyle: 'undefined' | 'null' | 'both';
-        generateComments: boolean;
-        fileHeader?: string;
-        baseUrl?: string;
-        includeHttpOptions?: boolean;
-        operationIdSeparator?: string;
         customHeaders?: Record<string, string>; // New option
         responseTypeMapping?: { // New option
             [contentType: string]: 'json' | 'blob' | 'arraybuffer' | 'text';
         };
+        customizeMethodName?: (operationId: string) => string;
     };
     compilerOptions?: {
         declaration?: boolean;

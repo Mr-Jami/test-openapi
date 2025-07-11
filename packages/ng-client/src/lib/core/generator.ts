@@ -45,7 +45,7 @@ export function generateFromSwagger(
             tokenGenerator.generate(servicesOutput);
 
             // Generate date transformer if enabled
-            if (GENERATOR_CONFIG.options.dateTransformer) {
+            if (GENERATOR_CONFIG.options.dateType === 'Date') {
                 const dateTransformer = new DateTransformerGenerator(project);
                 dateTransformer.generate(servicesOutput);
                 console.log(`✅ Date transformer generated`);
@@ -68,7 +68,11 @@ export function generateFromSwagger(
 
         console.log('🎉 Generation completed successfully!');
     } catch (error) {
-        console.error('❌ Error during generation:', error);
+        if (error instanceof Error) {
+            console.error('❌ Error during generation:', error.message);
+        } else {
+            console.error('❌ Unknown error during generation:', error);
+        }
         process.exit(1);
     }
 }

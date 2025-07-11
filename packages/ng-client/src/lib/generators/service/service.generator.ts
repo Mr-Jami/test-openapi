@@ -1,4 +1,4 @@
-import {Project, Scope, SourceFile} from 'ts-morph';
+import {MethodDeclaration, Project, Scope, SourceFile} from 'ts-morph';
 import {SwaggerParser} from '../../core';
 import * as path from 'path';
 import {GENERATOR_CONFIG, SERVICE_GENERATOR_HEADER_COMMENT} from "../../config";
@@ -75,13 +75,6 @@ export class ServiceGenerator {
 
             if (path.tags && path.tags.length > 0) {
                 controllerName = path.tags[0];
-            } else if (path.operationId) {
-                // Extract controller from operationId (e.g., "UserController_getUser" -> "User")
-                const regex = new RegExp(`^(\\w+)${GENERATOR_CONFIG.options.operationIdSeparator}`);
-                const match = path.operationId.match(regex);
-                if (match) {
-                    controllerName = match[1];
-                }
             } else {
                 // Extract from path (e.g., "/api/users/{id}" -> "Users")
                 const pathParts = path.path.split('/').filter(p => p && !p.startsWith('{'));
@@ -258,5 +251,13 @@ export class ServiceGenerator {
         operations.forEach(operation => {
             addServiceMethod(serviceClass, operation);
         });
+
+        if (this.hasDuplicateMethodNames(serviceClass.getMethods())) {
+            throw new Error(`Duplicate method names found in service class ${className}. Please ensure unique method names for each operation.`);
+        }
+    }
+
+    private hasDuplicateMethodNames<T extends MethodDeclaration>(arr: T[]): boolean {
+        return new Set(arr.map(method => method.getName())).size !== arr.length;
     }
 }

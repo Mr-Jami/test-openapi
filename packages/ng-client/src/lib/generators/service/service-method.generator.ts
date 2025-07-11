@@ -21,10 +21,23 @@ export function addServiceMethod(serviceClass: ClassDeclaration, operation: Path
 }
 
 export function generateMethodName(operation: PathInfo): string {
+    if (GENERATOR_CONFIG.options.customizeMethodName){
+        if (operation.operationId == null) {
+            throw new Error(`Operation ID is required for method name customization of operation: (${operation.method}) ${operation.path}`);
+        }
+        return GENERATOR_CONFIG.options.customizeMethodName(operation.operationId);
+    } else {
+        return defaultNameGenerator(operation);
+    }
+}
+
+export function generateReturnType(): string {
+    return 'Observable<any>';
+}
+
+export function defaultNameGenerator(operation: PathInfo): string {
     if (operation.operationId) {
-        const regex = new RegExp(`^(\\w+)${GENERATOR_CONFIG.options.operationIdSeparator}`);
-        const name = operation.operationId.replace(regex, '');
-        return camelCase(name);
+        return camelCase(operation.operationId);
     }
 
     const method = operation.method.toLowerCase();
@@ -32,10 +45,6 @@ export function generateMethodName(operation: PathInfo): string {
     const resource = pathParts[pathParts.length - 1] || 'resource';
 
     return `${method}${pascalCase(resource)}`;
-}
-
-export function generateReturnType(): string {
-    return 'Observable<any>';
 }
 
 export function getRequestBodyType(requestBody: RequestBody): string {
