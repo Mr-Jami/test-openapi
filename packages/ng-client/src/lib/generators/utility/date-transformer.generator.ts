@@ -9,7 +9,7 @@ export class DateTransformerGenerator {
     }
 
     generate(outputDir: string): void {
-        const utilsDir = path.join(outputDir, '../utils');
+        const utilsDir = path.join(outputDir, 'utils');
         const filePath = path.join(utilsDir, 'date-transformer.ts');
 
         const sourceFile = this.project.createSourceFile(filePath, '', {overwrite: true});

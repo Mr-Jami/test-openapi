@@ -9,7 +9,7 @@ export class TokenGenerator {
     }
 
     generate(outputDir: string): void {
-        const tokensDir = path.join(outputDir, '../tokens');
+        const tokensDir = path.join(outputDir, 'tokens');
         const filePath = path.join(tokensDir, 'index.ts');
 
         const sourceFile = this.project.createSourceFile(filePath, '', {overwrite: true});

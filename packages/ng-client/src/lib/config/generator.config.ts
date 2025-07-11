@@ -2,10 +2,7 @@ import {GeneratorConfig} from "../types";
 
 export const GENERATOR_CONFIG: GeneratorConfig = {
     input: './packages/ng-client/src/lib/swagger.json',
-    output: {
-        types: './packages/ng-client/src/lib/generated/models/index.ts',
-        services: './packages/ng-client/src/lib/generated/services',
-    },
+    output: './client',
     options: {
         enumStyle: 'enum',
         generateEnumBasedOnDescription: true,

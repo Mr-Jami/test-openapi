@@ -30,27 +30,7 @@ program
                 process.exit(1);
             }
 
-            let config = {};
-            if (options.config) {
-                const configPath = path.resolve(options.config);
-                if (fs.existsSync(configPath)) {
-                    config = require(configPath);
-                }
-            }
-
-            const generatorOptions = {
-                generateTypes: !options.servicesOnly,
-                generateServices: !options.typesOnly,
-                config: {
-                    ...config,
-                    output: {
-                        types: path.join(options.output, 'models/index.ts'),
-                        services: path.join(options.output, 'services'),
-                    },
-                },
-            };
-
-            generateFromSwagger(inputPath, generatorOptions);
+            generateFromSwagger(inputPath);
         } catch (error) {
             console.error('Generation failed:', error);
             process.exit(1);

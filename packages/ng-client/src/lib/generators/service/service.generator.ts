@@ -17,7 +17,8 @@ export class ServiceGenerator {
         this.spec = JSON.parse(require('fs').readFileSync(swaggerPath, 'utf8'));
     }
 
-    generate(outputDir: string): void {
+    generate(outputRoot: string): void {
+        const outputDir = path.join(outputRoot, 'services');
         const paths = this.extractPaths();
         const controllerGroups = this.groupPathsByController(paths);
 

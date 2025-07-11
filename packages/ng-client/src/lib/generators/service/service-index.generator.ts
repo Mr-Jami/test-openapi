@@ -11,7 +11,8 @@ export class ServiceIndexGenerator {
         this.project = project;
     }
 
-    generateIndex(servicesDir: string): void {
+    generateIndex(outputRoot: string): void {
+        const servicesDir = path.join(outputRoot, 'services');
         const indexPath = path.join(servicesDir, 'index.ts');
         const sourceFile = this.project.createSourceFile(indexPath, '', {overwrite: true});
 

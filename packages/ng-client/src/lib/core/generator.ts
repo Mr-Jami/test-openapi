@@ -4,24 +4,11 @@ import {TypeGenerator} from "../generators";
 import {DateTransformerGenerator, FileDownloadGenerator, TokenGenerator} from "../generators/utility";
 import {ServiceGenerator, ServiceIndexGenerator} from "../generators/service";
 
-export interface GeneratorOptions {
-    generateTypes?: boolean;
-    generateServices?: boolean;
-    typesOutput?: string;
-    servicesOutput?: string;
-}
-
 export function generateFromSwagger(
     swaggerPath: string,
-    options: GeneratorOptions = {}
 ): void {
-    const {
-        generateTypes = true,
-        generateServices = true,
-        typesOutput = './src/generated/models/index.ts',
-        servicesOutput = './src/generated/services',
-    } = options;
-
+    const outputPath = GENERATOR_CONFIG.output;
+    const generateServices = GENERATOR_CONFIG.options.generateServices ?? true;
     try {
         const project = new Project({
             compilerOptions: {
@@ -33,40 +20,38 @@ export function generateFromSwagger(
             },
         });
 
-        if (generateTypes) {
-            const typeGenerator = new TypeGenerator(swaggerPath, typesOutput);
-            typeGenerator.generate();
-            console.log(`✅ TypeScript interfaces generated at: ${typesOutput}`);
-        }
+        const typeGenerator = new TypeGenerator(swaggerPath, outputPath);
+        typeGenerator.generate();
+        console.log(`✅ TypeScript interfaces generated`);
 
         if (generateServices) {
             // Generate tokens first
             const tokenGenerator = new TokenGenerator(project);
-            tokenGenerator.generate(servicesOutput);
+            tokenGenerator.generate(outputPath);
 
             // Generate date transformer if enabled
             if (GENERATOR_CONFIG.options.dateType === 'Date') {
                 const dateTransformer = new DateTransformerGenerator(project);
-                dateTransformer.generate(servicesOutput);
+                dateTransformer.generate(outputPath);
                 console.log(`✅ Date transformer generated`);
             }
 
             // Generate file download helper
             const fileDownloadHelper = new FileDownloadGenerator(project);
-            fileDownloadHelper.generate(servicesOutput);
+            fileDownloadHelper.generate(outputPath);
             console.log(`✅ File download helper generated`);
 
             const serviceGenerator = new ServiceGenerator(swaggerPath, project);
-            serviceGenerator.generate(servicesOutput);
+            serviceGenerator.generate(outputPath);
 
             // Generate index file
             const indexGenerator = new ServiceIndexGenerator(project);
-            indexGenerator.generateIndex(servicesOutput);
+            indexGenerator.generateIndex(outputPath);
 
-            console.log(`✅ Angular services generated at: ${servicesOutput}`);
+            console.log(`✅ Angular services generated`);
         }
 
-        console.log('🎉 Generation completed successfully!');
+        console.log('🎉 Generation completed successfully at:', outputPath);
     } catch (error) {
         if (error instanceof Error) {
             console.error('❌ Error during generation:', error.message);
@@ -81,10 +66,5 @@ export function generateFromSwagger(
 if (require.main === module) {
     const swaggerPath = process.argv[2] || './swagger.json';
 
-    generateFromSwagger(swaggerPath, {
-        generateTypes: true,
-        generateServices: true,
-        typesOutput: './src/generated/models/index.ts',
-        servicesOutput: './src/generated/services',
-    });
+    generateFromSwagger(swaggerPath);
 }

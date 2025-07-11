@@ -9,7 +9,8 @@ export class TypeGenerator {
     private readonly sourceFile: SourceFile;
     private readonly generatedTypes = new Set<string>();
 
-    constructor(swaggerPath: string, outputPath: string) {
+    constructor(swaggerPath: string, outputRoot: string) {
+        const outputPath = outputRoot + '/models/index.ts';
         this.project = new Project({
             compilerOptions: {
                 declaration: true,
