@@ -94,63 +94,138 @@ export function isMultipartFormData(operation: PathInfo): boolean {
 export function getResponseTypeFromResponse(response: SwaggerResponse, config?: GeneratorConfig): 'json' | 'blob' | 'arraybuffer' | 'text' {
     const content = response.content || {};
 
+    if (Object.keys(content).length === 0) {
+        return 'json'; // default for empty content
+    }
+
+    // Collect all possible response types with their priorities
+    const responseTypes: Array<{ type: 'json' | 'blob' | 'arraybuffer' | 'text', priority: number, contentType: string }> = [];
+
     // Check each content type and its schema
     for (const [contentType, mediaType] of Object.entries(content)) {
         const schema = mediaType?.schema;
 
-        // Check custom mappings first
+        // Check custom mappings first (highest priority)
         const mapping = config?.options?.responseTypeMapping || {};
         if (mapping[contentType]) {
-            return mapping[contentType];
+            responseTypes.push({
+                type: mapping[contentType],
+                priority: 1, // highest priority
+                contentType
+            });
+            continue;
         }
 
         // Check schema format for binary indication
         if (schema?.format === 'binary' || schema?.format === 'byte') {
-            return 'blob';
+            responseTypes.push({
+                type: 'blob',
+                priority: 2,
+                contentType
+            });
+            continue;
         }
 
         // Check if schema type indicates binary
-        if (schema?.type === 'string' && schema?.format === 'binary') {
-            return 'blob';
+        if (schema?.type === 'string' && (schema?.format === 'binary' || schema?.format === 'byte')) {
+            responseTypes.push({
+                type: 'blob',
+                priority: 2,
+                contentType
+            });
+            continue;
         }
 
-        // Generic content type detection
-        return inferResponseTypeFromContentType(contentType);
+        // Infer from content type with appropriate priority
+        const inferredType = inferResponseTypeFromContentType(contentType);
+        let priority = 3; // default priority
+
+        // Prioritize JSON over other types
+        if (inferredType === 'json') {
+            priority = 2;
+        }
+
+        responseTypes.push({
+            type: inferredType,
+            priority,
+            contentType
+        });
     }
 
-    return 'json'; // default
+    // Sort by priority (lower number = higher priority) and return the best match
+    responseTypes.sort((a, b) => a.priority - b.priority);
+    return responseTypes[0]?.type || 'json';
 }
 
 export function inferResponseTypeFromContentType(contentType: string): 'json' | 'blob' | 'arraybuffer' | 'text' {
     // Normalize content type (remove parameters like charset)
     const normalizedType = contentType.split(';')[0].trim().toLowerCase();
 
-    // JSON types
-    if (normalizedType.includes('json') || normalizedType === 'application/ld+json') {
+    // JSON types (highest priority for structured data)
+    if (normalizedType.includes('json') ||
+        normalizedType === 'application/ld+json' ||
+        normalizedType === 'application/hal+json' ||
+        normalizedType === 'application/vnd.api+json') {
         return 'json';
     }
 
-    // Text types (but not text/plain with binary format - handled above)
-    if (normalizedType.startsWith('text/') &&
-        !normalizedType.includes('text/rtf') && // RTF is often better as blob
-        !normalizedType.includes('text/cache-manifest')) { // Some text/* are binary
+    // XML can be treated as text for parsing
+    if (normalizedType.includes('xml') ||
+        normalizedType === 'application/soap+xml' ||
+        normalizedType === 'application/atom+xml' ||
+        normalizedType === 'application/rss+xml') {
         return 'text';
     }
 
-    // XML can be text or json depending on use case
-    if (normalizedType.includes('xml')) {
+    // Text types (but exclude certain binary-like text types)
+    if (normalizedType.startsWith('text/')) {
+        // These text types are better handled as blobs
+        const binaryTextTypes = [
+            'text/rtf',
+            'text/cache-manifest',
+            'text/vcard',
+            'text/calendar'
+        ];
+
+        if (binaryTextTypes.includes(normalizedType)) {
+            return 'blob';
+        }
+
         return 'text';
+    }
+
+    // Form data should be handled as text for parsing
+    if (normalizedType === 'application/x-www-form-urlencoded' ||
+        normalizedType === 'multipart/form-data') {
+        return 'text';
+    }
+
+    // Specific text-like application types
+    if (normalizedType === 'application/javascript' ||
+        normalizedType === 'application/typescript' ||
+        normalizedType === 'application/css' ||
+        normalizedType === 'application/yaml' ||
+        normalizedType === 'application/x-yaml' ||
+        normalizedType === 'application/toml') {
+        return 'text';
+    }
+
+    // Binary types that should use arraybuffer for better performance
+    if (normalizedType.startsWith('image/') ||
+        normalizedType.startsWith('audio/') ||
+        normalizedType.startsWith('video/') ||
+        normalizedType === 'application/pdf' ||
+        normalizedType === 'application/zip' ||
+        normalizedType.includes('octet-stream')) {
+        return 'arraybuffer';
     }
 
     // Everything else is likely binary and should be blob
     // This includes:
-    // - application/* (except json/xml)
-    // - image/*
-    // - audio/*
-    // - video/*
-    // - font/*
-    // - model/*
-    // - multipart/* (except multipart/form-data which is handled separately)
+    // - Most application/* types
+    // - font/* types
+    // - model/* types
+    // - Other multipart/* types
     return 'blob';
 }
 
