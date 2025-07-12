@@ -32,7 +32,7 @@ export function getTypeScriptType(
         nullable = typeof formatOrNullable === 'boolean' ? formatOrNullable : schema.nullable;
     }
 
-    if (!schema || !schema.type) {
+    if (!schema) {
         return 'any';
     }
 
